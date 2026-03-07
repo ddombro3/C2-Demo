@@ -1,0 +1,38 @@
+.split-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 18px;
+  width: 100%;
+}
+
+.split-left,
+.split-right {
+  min-width: 0;
+}
+
+.attacker-panel,
+.target-panel {
+  height: 100%;
+}
+
+.target-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
+}
+
+.target-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 1180px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .target-grid {
+    grid-template-columns: 1fr;
+  }
+}
