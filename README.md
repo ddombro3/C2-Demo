@@ -36,7 +36,7 @@ Everything is handled with **local React state** and **static demo responses**.
   - relay
 - Simulated package staging:
   - safe package
-  - overflow-demo package
+  - overflow-demo package/msfvenom
 - Simulated inbound transfer path:
   - `C2 -> Relay -> Target`
 - Simulated outbound callback / beacon path:
