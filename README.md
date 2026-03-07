@@ -369,21 +369,7 @@ It is **not** intended to be a real offensive tool.
 
 ---
 
-## License
 
-This project is intended for educational use.
-
-If you want to add an open-source license, add a `LICENSE` file and update this section.
-
-Example:
-
-```text
-This project is licensed under the MIT License.
-```
-
-If this repository is only for personal, classroom, or demo use, you can also keep it private.
-
----
 
 ## Author
 
