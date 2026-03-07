@@ -58,21 +58,48 @@ Everything is handled with **local React state** and **static demo responses**.
 
 ---
 
+## Purpose and Safety
+
+This project exists to **visually explain concepts** in a controlled, non-operational way.
+
+It is meant for:
+
+- classroom demos
+- portfolio presentation
+- UI simulation
+- high-level security concept explanation
+- safe visualization of routing, staging, buffer, and beacon ideas
+
+It is **not** a real C2 framework and is **not** designed to be deployable or used against real systems.
+
+There is no real:
+
+- scanning engine
+- payload delivery
+- remote agent
+- exploit execution
+- live callback traffic
+- socket communication
+- persistence
+- remote tasking
+
+Anything that looks like those concepts is only part of the local UI simulation.
+
+---
+
 ## Requirements
 
 Before running this project, make sure you have:
 
+- **Git**
 - **Node.js**
 - **npm**
 
-A modern Node version is recommended.
+A modern Node.js version is recommended.
 
----
-
-## Installation
-
-Clone the repository and move into the project folder:
+You can verify your tools with:
 
 ```bash
-git clone https://github.com/ddombro3/C2-Demo.git
-cd C2-Demo
+git --version
+node -v
+npm -v
