@@ -29,7 +29,7 @@ Everything is handled with **local React state** and **static demo responses**.
 ## Features
 
 - Linux-style mock terminal with prompt
-- Static `nmap`-style recon output
+- Static nmap-style recon output
 - Mock C2 IP, relay IP, and target IP display
 - Route modes:
   - direct
