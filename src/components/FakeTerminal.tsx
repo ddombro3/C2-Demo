@@ -11,6 +11,10 @@ const PROMPT_USER = "c2sudo";
 const PROMPT_HOST = "c2-console";
 const PROMPT_PATH = "~/ops";
 
+function isBlankLine(value: string) {
+  return value.trim().length === 0;
+}
+
 export default function FakeTerminal({
   lines,
   onCommand,
@@ -47,7 +51,7 @@ export default function FakeTerminal({
         {lines.map((entry) => {
           if (entry.tone === "command") {
             return (
-              <div key={entry.id} className="terminal-line command">
+              <div key={entry.id} className="terminal-line terminal-command-line">
                 <span className="linux-prompt-inline">
                   <span className="prompt-userhost">
                     {PROMPT_USER}@{PROMPT_HOST}
@@ -61,10 +65,16 @@ export default function FakeTerminal({
             );
           }
 
+          if (isBlankLine(entry.text)) {
+            return <div key={entry.id} className="terminal-line terminal-blank-line" />;
+          }
+
           return (
-            <div key={entry.id} className={`terminal-line ${entry.tone}`}>
-              <span className="terminal-output-prefix">•</span>
-              <span>{entry.text}</span>
+            <div
+              key={entry.id}
+              className={`terminal-line terminal-output-line ${entry.tone}`}
+            >
+              <span className="terminal-output-text">{entry.text}</span>
             </div>
           );
         })}
@@ -94,6 +104,10 @@ export default function FakeTerminal({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder='type "help"'
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
             />
           </div>
 

